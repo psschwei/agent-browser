@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Browser - Playground</title>
+    <link rel="stylesheet" href="/src/ui/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Agent Browser Playground</h1>
+            <button id="settingsBtn" class="icon-btn" title="Settings">⚙️</button>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Conversations</h2>
+                    <button id="newConversationBtn" class="icon-btn" title="New Conversation">➕</button>
+                </div>
+                <div id="conversationList" class="conversation-list"></div>
+            </aside>
+
+            <main class="chat-area">
+                <div id="messages" class="messages"></div>
+                <div class="input-area">
+                    <textarea
+                        id="userInput"
+                        placeholder="Type your message here..."
+                        rows="3"
+                    ></textarea>
+                    <button id="sendBtn" class="send-btn">Send</button>
+                </div>
+            </main>
+
+            <aside class="tool-panel">
+                <h2>Tools & Events</h2>
+                <div id="toolLog" class="tool-log"></div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiEndpoint">API Endpoint</label>
+                    <input
+                        type="text"
+                        id="apiEndpoint"
+                        placeholder="https://api.openai.com/v1"
+                        value="https://api.openai.com/v1"
+                    >
+                    <small>OpenAI-compatible endpoint (e.g., OpenRouter, LiteLLM proxy)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="apiKey">API Key</label>
+                    <input
+                        type="password"
+                        id="apiKey"
+                        placeholder="sk-..."
+                    >
+                    <small>Your API key (stored in browser localStorage)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="modelName">Model</label>
+                    <input
+                        type="text"
+                        id="modelName"
+                        placeholder="gpt-4"
+                        value="gpt-4"
+                    >
+                    <small>Model name (e.g., gpt-4, claude-3-5-sonnet-20241022)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="maxIterations">Max Iterations</label>
+                    <input
+                        type="number"
+                        id="maxIterations"
+                        min="1"
+                        max="50"
+                        value="10"
+                    >
+                    <small>Maximum number of ReAct loop iterations</small>
+                </div>
+
+                <div class="button-group">
+                    <button id="saveSettingsBtn" class="primary-btn">Save Settings</button>
+                    <button id="clearDataBtn" class="danger-btn">Clear All Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/ui/playground.ts"></script>
+</body>
+</html>

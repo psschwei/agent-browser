@@ -1,0 +1,20 @@
+{
+  "name": "agent-browser",
+  "version": "1.0.0",
+  "description": "Browser-native AI agent framework with ReAct loop and custom tools",
+  "type": "module",
+  "main": "dist/agent-browser.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["ai", "agent", "browser", "react", "llm", "tools"],
+  "author": "",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}
