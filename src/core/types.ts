@@ -16,6 +16,11 @@ export interface Tool {
   description: string;
   parameters: ToolParameter[];
   execute: (params: Record<string, any>) => Promise<any>;
+
+  // MCP metadata (optional, only present for MCP tools)
+  source?: 'local' | 'mcp';
+  serverId?: string;
+  serverName?: string;
 }
 
 export interface Message {

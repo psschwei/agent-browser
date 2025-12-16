@@ -8,6 +8,7 @@ A lightweight, browser-native AI agent framework using the ReAct (Reasoning + Ac
 - **ReAct Loop**: Implements the proven Reasoning + Acting pattern for autonomous task completion
 - **Provider-agnostic**: Works with any OpenAI-compatible API (OpenRouter, LiteLLM, OpenAI, etc.)
 - **Custom Tools**: Easy-to-use plugin system for JavaScript/TypeScript functions
+- **MCP Integration**: Dynamic tool loading from Model Context Protocol (MCP) servers
 - **Persistent State**: Conversations automatically saved to browser localStorage
 - **Interactive Playground**: Built-in UI for testing and chatting with agents
 - **TypeScript**: Fully typed for excellent developer experience
@@ -111,6 +112,144 @@ const weatherTool: Tool = {
 toolManager.register(weatherTool);
 ```
 
+## MCP Integration
+
+Agent Browser supports dynamic tool loading from [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers, allowing you to extend your agent's capabilities without writing code.
+
+### Using MCP in the Playground
+
+1. **Open Settings** (⚙️ button)
+2. **Scroll to MCP Servers section**
+3. **Add a Server**:
+   - Click the ➕ button
+   - Enter server name (e.g., "Weather Tools")
+   - Enter server URL (e.g., `http://localhost:3000`)
+   - Optionally add custom headers as JSON
+   - Click "Test Connection" to verify
+   - Click "Add Server"
+4. **Enable/Disable Servers**: Toggle servers on/off with the switch
+5. **Refresh Tools**: Click "Refresh MCP Tools" to reload from all enabled servers
+
+### Using MCP Programmatically
+
+```typescript
+import { MCPManager, ToolManager, Agent, LLMClient } from 'agent-browser';
+
+// Initialize managers
+const toolManager = new ToolManager();
+const mcpManager = new MCPManager();
+
+// Add an MCP server
+mcpManager.addServer({
+  name: 'My MCP Server',
+  url: 'http://localhost:3000',
+  enabled: true,
+  headers: {
+    'Authorization': 'Bearer token123'  // Optional
+  }
+});
+
+// Load tools from all enabled MCP servers
+const result = await mcpManager.loadMCPTools(toolManager);
+console.log(`Loaded ${result.loaded} tools`);
+
+if (result.errors.length > 0) {
+  console.error('Errors:', result.errors);
+}
+
+// Create agent with both built-in and MCP tools
+const agent = new Agent(llmClient, toolManager);
+```
+
+### Testing MCP Connections
+
+```typescript
+// Test a server before adding it
+const testResult = await mcpManager.testConnection(
+  'http://localhost:3000',
+  { 'Authorization': 'Bearer token' }  // Optional headers
+);
+
+if (testResult.success) {
+  console.log(`Found ${testResult.toolCount} tools`);
+} else {
+  console.error(`Connection failed: ${testResult.error}`);
+}
+```
+
+### MCP Server Requirements
+
+- **HTTP/HTTPS Only**: Browser environment requires HTTP endpoints (no stdio support)
+- **JSON-RPC 2.0**: Servers must implement the MCP protocol over HTTP
+- **Supported Operations**:
+  - `tools/list` - List available tools
+  - `tools/call` - Execute a tool
+
+### Creating an HTTP MCP Server
+
+If you have an stdio-based MCP server, you can wrap it with HTTP:
+
+```javascript
+// server.js - Simple HTTP wrapper for MCP
+import express from 'express';
+import cors from 'cors';
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.post('/', async (req, res) => {
+  const { method, params } = req.body;
+
+  // Handle tools/list
+  if (method === 'tools/list') {
+    res.json({
+      jsonrpc: '2.0',
+      id: req.body.id,
+      result: {
+        tools: [
+          {
+            name: 'my_tool',
+            description: 'Does something useful',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                input: { type: 'string', description: 'Input text' }
+              },
+              required: ['input']
+            }
+          }
+        ]
+      }
+    });
+    return;
+  }
+
+  // Handle tools/call
+  if (method === 'tools/call') {
+    const { name, arguments: args } = params;
+
+    // Execute your tool logic here
+    const result = await executeMyTool(name, args);
+
+    res.json({
+      jsonrpc: '2.0',
+      id: req.body.id,
+      result: {
+        content: [
+          { type: 'text', text: JSON.stringify(result) }
+        ]
+      }
+    });
+    return;
+  }
+
+  res.status(400).json({ error: 'Unknown method' });
+});
+
+app.listen(3000, () => console.log('MCP server on http://localhost:3000'));
+```
+
 ### Managing Conversations
 
 ```typescript
@@ -199,9 +338,13 @@ agent-browser/
 │   │   ├── agent.ts          # ReAct agent implementation
 │   │   ├── llm-client.ts     # LLM API client
 │   │   ├── tool-manager.ts   # Tool registration & execution
-│   │   └── state-manager.ts  # localStorage persistence
+│   │   ├── state-manager.ts  # localStorage persistence
+│   │   ├── mcp-types.ts      # MCP protocol type definitions
+│   │   ├── mcp-client.ts     # MCP JSON-RPC client
+│   │   └── mcp-manager.ts    # MCP server management
 │   ├── ui/
 │   │   ├── playground.ts     # Playground UI controller
+│   │   ├── mcp-settings.ts   # MCP server management UI
 │   │   └── styles.css        # Playground styles
 │   ├── tools/
 │   │   └── examples.ts       # Built-in example tools
@@ -275,6 +418,60 @@ class StateManager {
 }
 ```
 
+### MCPManager
+
+```typescript
+class MCPManager {
+  // Add a new MCP server
+  addServer(config: Omit<MCPServerConfig, 'id' | 'createdAt'>): MCPServerConfig
+
+  // Remove an MCP server
+  removeServer(id: string): void
+
+  // Update server configuration
+  updateServer(id: string, updates: Partial<MCPServerConfig>): void
+
+  // Get all servers
+  getServers(): MCPServerConfig[]
+
+  // Get enabled servers only
+  getEnabledServers(): MCPServerConfig[]
+
+  // Load tools from all enabled servers
+  async loadMCPTools(toolManager: ToolManager): Promise<{
+    loaded: number;
+    errors: Array<{ serverId: string; serverName: string; error: string }>;
+  }>
+
+  // Remove all MCP tools from tool manager
+  unloadMCPTools(toolManager: ToolManager): void
+
+  // Test connection to a server
+  async testConnection(url: string, headers?: Record<string, string>): Promise<{
+    success: boolean;
+    error?: string;
+    toolCount?: number;
+  }>
+}
+```
+
+### MCPClient
+
+```typescript
+class MCPClient {
+  constructor(url: string, headers?: Record<string, string>)
+
+  // List all tools from the MCP server
+  async listTools(): Promise<MCPToolSchema[]>
+
+  // Execute a tool on the MCP server
+  async callTool(name: string, args: Record<string, any>): Promise<MCPToolResult>
+
+  // Test if server is reachable
+  async ping(): Promise<boolean>
+}
+```
+
 ## Building for Production
 
 ```bash
@@ -327,7 +524,7 @@ const llmClient = new LLMClient({
 
 ## Future Roadmap
 
-- [ ] MCP (Model Context Protocol) server integration
+- [x] MCP (Model Context Protocol) server integration
 - [ ] Browser API tools (DOM manipulation, localStorage access)
 - [ ] Web scraping and navigation tools
 - [ ] Streaming LLM responses
@@ -336,6 +533,7 @@ const llmClient = new LLMClient({
 - [ ] WASM for performance-critical operations
 - [ ] Vector search and embeddings
 - [ ] Vision and multimodal support
+- [ ] MCP resources and prompts support (beyond basic tool serving)
 
 ## Contributing
 

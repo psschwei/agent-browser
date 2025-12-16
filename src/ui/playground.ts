@@ -1,10 +1,12 @@
-import { Agent, LLMClient, ToolManager, StateManager, Conversation, getExampleTools } from '../main';
+import { Agent, LLMClient, ToolManager, StateManager, Conversation, getExampleTools, MCPManager } from '../main';
+import { MCPSettingsUI } from './mcp-settings';
 
 class Playground {
   private agent: Agent;
   private llmClient: LLMClient;
   private toolManager: ToolManager;
   private stateManager: StateManager;
+  private mcpManager: MCPManager;
   private currentConversation: Conversation | null = null;
   private isRunning = false;
 
@@ -28,6 +30,9 @@ class Playground {
     // Initialize state manager
     this.stateManager = new StateManager();
 
+    // Initialize MCP manager
+    this.mcpManager = new MCPManager();
+
     // Load or create configuration
     const config = this.loadConfig();
 
@@ -36,7 +41,13 @@ class Playground {
 
     // Initialize tool manager with example tools
     this.toolManager = new ToolManager();
-    getExampleTools().forEach(tool => this.toolManager.register(tool));
+    getExampleTools().forEach(tool => {
+      tool.source = 'local';
+      this.toolManager.register(tool);
+    });
+
+    // Load MCP tools
+    this.loadMCPTools();
 
     // Initialize agent
     this.agent = new Agent(this.llmClient, this.toolManager);
@@ -54,6 +65,18 @@ class Playground {
       this.loadConversation(conversations[0].id);
     } else {
       this.createNewConversation();
+    }
+  }
+
+  private async loadMCPTools() {
+    try {
+      const result = await this.mcpManager.loadMCPTools(this.toolManager);
+      if (result.errors.length > 0) {
+        console.error('MCP tool loading errors:', result.errors);
+      }
+      console.log(`Loaded ${result.loaded} MCP tools`);
+    } catch (error) {
+      console.error('Failed to load MCP tools:', error);
     }
   }
 
@@ -310,6 +333,13 @@ class Playground {
 
     const maxIter = localStorage.getItem('agent-browser:maxIterations');
     (document.getElementById('maxIterations') as HTMLInputElement).value = maxIter || '10';
+
+    // Render MCP settings
+    const mcpContainer = document.getElementById('mcpSettingsContainer');
+    if (mcpContainer) {
+      const mcpUI = new MCPSettingsUI(mcpContainer, this.mcpManager);
+      mcpUI.onRefresh(() => this.refreshMCPTools());
+    }
   }
 
   private closeSettings() {
@@ -332,6 +362,20 @@ class Playground {
     this.agent.setMaxIterations(maxIterations);
 
     this.closeSettings();
+  }
+
+  private async refreshMCPTools() {
+    try {
+      const result = await this.mcpManager.loadMCPTools(this.toolManager);
+      if (result.errors.length > 0) {
+        alert(`Loaded ${result.loaded} tools with ${result.errors.length} errors. Check console for details.`);
+        console.error('MCP errors:', result.errors);
+      } else {
+        alert(`Successfully loaded ${result.loaded} MCP tools`);
+      }
+    } catch (error) {
+      alert(`Failed to refresh MCP tools: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private clearAllData() {

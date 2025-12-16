@@ -21,3 +21,8 @@ export {
   randomNumberTool,
   getExampleTools
 } from './tools/examples';
+
+// Export MCP classes
+export { MCPManager } from './core/mcp-manager';
+export { MCPClient } from './core/mcp-client';
+export * from './core/mcp-types';

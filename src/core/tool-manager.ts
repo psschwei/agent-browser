@@ -11,7 +11,13 @@ export class ToolManager {
    */
   register(tool: Tool): void {
     if (this.tools.has(tool.name)) {
-      throw new Error(`Tool '${tool.name}' is already registered`);
+      // Allow re-registration if same source (for MCP refresh)
+      const existing = this.tools.get(tool.name)!;
+      if (existing.source !== tool.source) {
+        throw new Error(
+          `Tool '${tool.name}' is already registered from ${existing.source || 'local'} source`
+        );
+      }
     }
     this.tools.set(tool.name, tool);
   }
