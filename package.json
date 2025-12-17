@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:userscript": "tsc && vite build --config vite.config.userscript.ts && node scripts/add-userscript-header.js",
     "preview": "vite preview"
   },
   "keywords": ["ai", "agent", "browser", "react", "llm", "tools"],

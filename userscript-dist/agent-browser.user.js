@@ -1,0 +1,80 @@
+// ==UserScript==
+// @name         Agent Browser - AI Web Automation
+// @namespace    https://github.com/agent-browser/agent-browser
+// @version      1.0.0
+// @description  AI-powered web automation using ReAct agents with DOM manipulation
+// @author       Agent Browser
+// @match        *://*/*
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
+// @grant        GM_registerMenuCommand
+// @connect      api.openai.com
+// @connect      api.anthropic.com
+// @connect      *
+// @run-at       document-idle
+// @license      Apache-2.0
+// ==/UserScript==
+
+(function(){"use strict";class x{llmClient;toolManager;messages=[];eventListeners=new Map;maxIterations=10;constructor(e,t){this.llmClient=e,this.toolManager=t}on(e,t){this.eventListeners.has(e)||this.eventListeners.set(e,[]),this.eventListeners.get(e).push(t)}emit(e,t){const s=this.eventListeners.get(e);s&&s.forEach(n=>n(t))}async run(e,t){t&&(this.maxIterations=t),this.messages.push({role:"user",content:e});let s=0,n="";try{for(;s<this.maxIterations;){s++,this.emit("thinking",{iteration:s,messages:this.messages});const o=this.toolManager.toOpenAIFormat(),i=await this.llmClient.chat(this.messages,o);if(this.messages.push(i.message),i.finish_reason==="stop"||!i.message.tool_calls){n=i.message.content,this.emit("complete",{answer:n,iterations:s});break}if(i.message.tool_calls&&i.message.tool_calls.length>0)for(const a of i.message.tool_calls){const l=a.function.name;let g={};try{g=JSON.parse(a.function.arguments)}catch{this.emit("error",{error:`Failed to parse tool arguments for ${l}`,toolCall:a}),this.messages.push({role:"tool",tool_call_id:a.id,name:l,content:JSON.stringify({error:"Failed to parse tool arguments",raw_arguments:a.function.arguments})});continue}this.emit("tool_call",{name:l,params:g,id:a.id});try{const u=await this.toolManager.execute(l,g);this.emit("observation",{name:l,result:u,id:a.id}),this.messages.push({role:"tool",tool_call_id:a.id,name:l,content:typeof u=="string"?u:JSON.stringify(u)})}catch(u){const b=u instanceof Error?u.message:String(u);this.emit("error",{error:b,tool:l,params:g}),this.messages.push({role:"tool",tool_call_id:a.id,name:l,content:JSON.stringify({error:b})})}}}return s>=this.maxIterations&&!n&&(this.emit("error",{error:"Maximum iterations reached without completing task"}),n="I was unable to complete the task within the maximum number of iterations."),n}catch(o){const i=o instanceof Error?o.message:String(o);throw this.emit("error",{error:i}),o}}getMessages(){return[...this.messages]}clearMessages(){this.messages=[]}loadMessages(e){this.messages=[...e]}setMaxIterations(e){this.maxIterations=e}}class v{config;constructor(e){this.config=e}updateConfig(e){this.config={...this.config,...e}}async chat(e,t){const s={model:this.config.model,messages:e.map(n=>({role:n.role,content:n.content,...n.tool_calls&&{tool_calls:n.tool_calls},...n.tool_call_id&&{tool_call_id:n.tool_call_id},...n.name&&{name:n.name}}))};t&&t.length>0&&(s.tools=t);try{const n=await fetch(`${this.config.endpoint}/chat/completions`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${this.config.apiKey}`},body:JSON.stringify(s)});if(!n.ok){const l=await n.text();throw new Error(`LLM API error (${n.status}): ${l}`)}const o=await n.json();if(!o.choices||o.choices.length===0)throw new Error("No response from LLM");const i=o.choices[0];return{message:{role:"assistant",content:i.message.content||"",...i.message.tool_calls&&{tool_calls:i.message.tool_calls}},finish_reason:i.finish_reason}}catch(n){throw n instanceof Error?n:new Error(`Failed to communicate with LLM: ${String(n)}`)}}getConfig(){return{endpoint:this.config.endpoint,model:this.config.model}}}class S{tools=new Map;register(e){if(this.tools.has(e.name)){const t=this.tools.get(e.name);if(t.source!==e.source)throw new Error(`Tool '${e.name}' is already registered from ${t.source||"local"} source`)}this.tools.set(e.name,e)}unregister(e){this.tools.delete(e)}async execute(e,t){const s=this.tools.get(e);if(!s)throw new Error(`Tool '${e}' not found`);const n=s.parameters.filter(o=>o.required&&!(o.name in t)).map(o=>o.name);if(n.length>0)throw new Error(`Missing required parameters: ${n.join(", ")}`);try{return await s.execute(t)}catch(o){throw new Error(`Tool execution failed: ${o instanceof Error?o.message:String(o)}`)}}getTools(){return Array.from(this.tools.values())}getTool(e){return this.tools.get(e)}toOpenAIFormat(){return this.getTools().map(e=>({type:"function",function:{name:e.name,description:e.description,parameters:{type:"object",properties:e.parameters.reduce((t,s)=>(t[s.name]={type:this.mapTypeToJSONSchema(s.type),description:s.description},t),{}),required:e.parameters.filter(t=>t.required).map(t=>t.name)}}}))}mapTypeToJSONSchema(e){switch(e){case"string":return"string";case"number":return"number";case"boolean":return"boolean";case"object":return"object";case"array":return"array";default:return"string"}}}const h=[{name:"click_element",description:"Click on an element using CSS selector",parameters:[{name:"selector",type:"string",description:"CSS selector for element to click",required:!0}],execute:async({selector:r})=>{const e=document.querySelector(r);if(!e)throw new Error(`Element not found: ${r}`);return e.click(),{success:!0,selector:r}}},{name:"query_selector",description:"Find elements on page using CSS selector and extract information",parameters:[{name:"selector",type:"string",description:"CSS selector to query",required:!0},{name:"extract",type:"string",description:"What to extract: text, html, or attribute name",required:!1}],execute:async({selector:r,extract:e="text"})=>{const t=Array.from(document.querySelectorAll(r));if(t.length===0)return{count:0,elements:[]};const s=t.map(n=>e==="text"?n.textContent?.trim():e==="html"?n.innerHTML:n.getAttribute(e));return{count:t.length,elements:s.filter(Boolean).slice(0,20)}}},{name:"fill_form_field",description:"Fill a form field (input, textarea, select) with specified value",parameters:[{name:"selector",type:"string",description:"CSS selector for input field",required:!0},{name:"value",type:"string",description:"Value to fill",required:!0}],execute:async({selector:r,value:e})=>{const t=document.querySelector(r);if(!t)throw new Error(`Element not found: ${r}`);return t.value=e,t.dispatchEvent(new Event("input",{bubbles:!0})),t.dispatchEvent(new Event("change",{bubbles:!0})),{success:!0,selector:r,value:e}}},{name:"submit_form",description:"Submit a form on the page",parameters:[{name:"selector",type:"string",description:"CSS selector for form element",required:!0}],execute:async({selector:r})=>{const e=document.querySelector(r);if(!e)throw new Error(`Form not found: ${r}`);if(e.tagName!=="FORM")throw new Error(`Element is not a form: ${r}`);return e.submit(),{success:!0,selector:r}}},{name:"get_attribute",description:"Get attribute value from an element",parameters:[{name:"selector",type:"string",description:"CSS selector for element",required:!0},{name:"attribute",type:"string",description:"Attribute name to retrieve (e.g., href, src, class)",required:!0}],execute:async({selector:r,attribute:e})=>{const t=document.querySelector(r);if(!t)throw new Error(`Element not found: ${r}`);const s=t.getAttribute(e);return{selector:r,attribute:e,value:s}}},{name:"wait_for_element",description:"Wait for element matching selector to appear on page",parameters:[{name:"selector",type:"string",description:"CSS selector to wait for",required:!0},{name:"timeout",type:"number",description:"Max wait time in milliseconds (default: 5000)",required:!1}],execute:async({selector:r,timeout:e=5e3})=>{const t=Date.now();for(;Date.now()-t<e;){if(document.querySelector(r))return{success:!0,selector:r,found:!0};await new Promise(n=>setTimeout(n,100))}throw new Error(`Element not found within ${e}ms: ${r}`)}},{name:"get_page_url",description:"Get the current page URL",parameters:[],execute:async()=>({url:window.location.href,hostname:window.location.hostname,pathname:window.location.pathname,search:window.location.search})},{name:"navigate",description:"Navigate to a different URL",parameters:[{name:"url",type:"string",description:"URL to navigate to (absolute or relative)",required:!0}],execute:async({url:r})=>(window.location.href=r,{success:!0,url:r})},{name:"get_page_content",description:"Extract readable content, title, and metadata from current page",parameters:[{name:"selector",type:"string",description:"Optional CSS selector to scope content extraction",required:!1}],execute:async({selector:r})=>{const e=r?document.querySelector(r):document.body;if(!e)throw new Error("Target element not found");const t=e.textContent?.trim().slice(0,1e4),s=Array.from(e.querySelectorAll("a")).map(o=>({text:o.textContent?.trim(),href:o.href})).filter(o=>o.text&&o.href).slice(0,50),n=Array.from(e.querySelectorAll("h1, h2, h3")).map(o=>({level:o.tagName,text:o.textContent?.trim()})).filter(o=>o.text).slice(0,20);return{title:document.title,url:window.location.href,text:t,links:s,headings:n}}},{name:"take_screenshot",description:"Get visual information about the page (element positions and text)",parameters:[{name:"selector",type:"string",description:"Optional CSS selector for specific element",required:!1}],execute:async({selector:r})=>{const e=r?document.querySelector(r):document.body;if(!e)throw new Error("Target element not found");const t=e.getBoundingClientRect();return{selector:r||"body",position:{top:t.top,left:t.left,width:t.width,height:t.height},visible:t.top<window.innerHeight&&t.bottom>0,text:e.textContent?.trim().slice(0,500)}}}];function E(r){const e=document.createElement("div");e.id="agent-browser-overlay",e.style.cssText=`
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 100vh;
+    background: white;
+    box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+    z-index: 999998;
+    padding: 20px;
+    overflow-y: auto;
+    font-family: system-ui, -apple-system, sans-serif;
+  `,e.innerHTML=`
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h2 style="margin: 0; font-size: 20px;">🤖 Agent Browser</h2>
+      <button id="agent-browser-close" style="border: none; background: none; font-size: 28px; cursor: pointer; line-height: 1; color: #666;">&times;</button>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 500; color: #333;">What should I do on this page?</label>
+      <textarea id="agent-browser-prompt"
+        placeholder="e.g., Find all products under $100"
+        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+    </div>
+
+    <button id="agent-browser-run"
+      style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 500; transition: opacity 0.2s;">
+      Run Agent
+    </button>
+
+    <div style="margin-top: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #333;">Activity Log</h3>
+        <button id="agent-browser-clear" style="border: none; background: none; font-size: 12px; cursor: pointer; color: #667eea; text-decoration: underline;">Clear</button>
+      </div>
+      <div id="agent-browser-status" style="padding: 10px; background: #f5f5f5; border-radius: 6px; font-size: 13px; min-height: 200px; max-height: 400px; overflow-y: auto; font-family: 'Monaco', 'Menlo', 'Consolas', monospace;"></div>
+    </div>
+  `,e.querySelector("#agent-browser-close").addEventListener("click",()=>{e.style.display="none"}),e.querySelector("#agent-browser-clear").addEventListener("click",()=>{const i=document.getElementById("agent-browser-status");i&&(i.innerHTML="")});const n=e.querySelector("#agent-browser-run"),o=e.querySelector("#agent-browser-prompt");return n.addEventListener("click",async()=>{const i=o.value.trim();if(i){n.disabled=!0,n.style.opacity="0.6",n.textContent="Running...";try{await r(i)}finally{n.disabled=!1,n.style.opacity="1",n.textContent="Run Agent"}}}),e}function c(r,e="info"){const t=document.getElementById("agent-browser-status");if(!t)return;const s=document.createElement("div"),n=new Date().toLocaleTimeString(),o={info:"#666",success:"#10b981",error:"#ef4444"};s.style.cssText=`
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: white;
+    border-radius: 4px;
+    border-left: 3px solid ${o[e]};
+    line-height: 1.4;
+  `,s.innerHTML=`
+    <span style="color: #999; font-size: 11px;">[${n}]</span>
+    <span style="color: ${o[e]}; margin-left: 8px;">${T(r)}</span>
+  `,t.appendChild(s),t.scrollTop=t.scrollHeight}function T(r){const e=document.createElement("div");return e.textContent=r,e.innerHTML}function _(r){const e=document.createElement("button");return e.id="agent-browser-fab",e.innerHTML="🤖",e.title="Agent Browser (Ctrl+Shift+A)",e.style.cssText=`
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 999999;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    cursor: pointer;
+    font-size: 30px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+  `,e.addEventListener("mouseenter",()=>{e.style.transform="scale(1.1)",e.style.boxShadow="0 6px 16px rgba(0,0,0,0.4)"}),e.addEventListener("mouseleave",()=>{e.style.transform="scale(1)",e.style.boxShadow="0 4px 12px rgba(0,0,0,0.3)"}),e.addEventListener("click",r),e}class p{static load(){return GM_getValue("agent_browser_config",{endpoint:"https://api.openai.com/v1",model:"gpt-4",apiKey:""})}static save(e){GM_setValue("agent_browser_config",e)}}function y(){const r=p.load(),e=prompt("Enter your OpenAI API key:",r.apiKey||"");e!==null&&(p.save({...r,apiKey:e}),alert("API key saved!"))}let m=null,d=null;async function C(r){const e=p.load();if(!e.apiKey){alert("Please configure your API key first (Tampermonkey menu → Configure API Key)"),y();return}c("Starting agent...","info");try{const t=new v(e),s=new S;h.forEach(o=>s.register(o)),c(`Registered ${h.length} DOM tools`,"info"),m=new x(t,s),m.on("thinking",o=>{c(`🤔 Thinking... (iteration ${o.iteration})`,"info")}),m.on("tool_call",o=>{const i=JSON.stringify(o.params);c(`🔧 Calling: ${o.name}(${i.length>50?i.substring(0,50)+"...":i})`,"info")}),m.on("observation",o=>{const i=typeof o.result=="string"?o.result:JSON.stringify(o.result);c(`✓ Result: ${i.length>100?i.substring(0,100)+"...":i}`,"success")}),m.on("error",o=>{c(`❌ Error: ${o.error}`,"error")}),m.on("complete",o=>{c(`✅ Complete! ${o.answer}`,"success")});const n=await m.run(r);c(`Final answer: ${n}`,"success")}catch(t){const s=t instanceof Error?t.message:String(t);c(`Failed to run agent: ${s}`,"error"),console.error("[Agent Browser] Error:",t)}}function f(){d?d.style.display="block":(d=E(C),document.body.appendChild(d))}function w(){if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",w);return}console.log("[Agent Browser] Userscript loaded ✓"),typeof GM_registerMenuCommand<"u"&&(GM_registerMenuCommand("Activate Agent",f),GM_registerMenuCommand("Configure API Key",y)),document.addEventListener("keydown",r=>{r.ctrlKey&&r.shiftKey&&r.key==="A"&&(r.preventDefault(),f())}),setTimeout(()=>{if(document.body){const r=_(f);document.body.appendChild(r)}},100)}w()})();

@@ -48,6 +48,90 @@ Example prompts:
 - "Get the current time in Tokyo"
 - "Generate 5 random numbers between 1 and 100"
 
+## Userscript for Web Automation
+
+Want to run AI agents on any website? Use the **portable userscript** version!
+
+### Installation
+
+1. **Install a userscript manager**:
+   - [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Firefox, Edge, Safari)
+   - [Violentmonkey](https://violentmonkey.github.io/) (Chrome, Firefox, Edge)
+   - [Greasemonkey](https://www.greasespot.net/) (Firefox)
+
+2. **Build the userscript**:
+   ```bash
+   npm run build:userscript
+   ```
+
+3. **Install the userscript**:
+   - Open `userscript-dist/agent-browser.user.js` in your browser
+   - Your userscript manager will detect it and prompt to install
+   - Or drag and drop the file into Tampermonkey dashboard
+
+### Usage
+
+Once installed, the userscript runs on every webpage:
+
+1. **Floating Button**: Click the 🤖 button in the bottom-right corner
+2. **Keyboard Shortcut**: Press `Ctrl+Shift+A` (or `Cmd+Shift+A` on Mac)
+3. **Tampermonkey Menu**: Right-click the Tampermonkey icon → "Activate Agent"
+
+### Configure API Key
+
+First time setup:
+1. Click Tampermonkey icon → "Configure API Key"
+2. Enter your OpenAI API key
+3. (Key is stored securely in Tampermonkey storage)
+
+### DOM Automation Tools
+
+The userscript includes 10 powerful DOM manipulation tools:
+
+- **get_page_content** - Extract text, links, and headings from the page
+- **query_selector** - Find elements by CSS selector and extract data
+- **click_element** - Click buttons, links, or any clickable element
+- **fill_form_field** - Fill input fields, textareas, and selects
+- **submit_form** - Submit forms
+- **get_attribute** - Get element attributes (href, src, class, etc.)
+- **wait_for_element** - Wait for dynamic elements to appear
+- **get_page_url** - Get current URL and path information
+- **navigate** - Navigate to a different URL
+- **take_screenshot** - Get element position and visibility info
+
+### Example Use Cases
+
+```
+On Amazon.com:
+"Find laptops under $1000 and show me the top 3 results"
+
+On any website:
+"Extract all email addresses from this page"
+"Click the 'Sign Up' button and fill the form with test data"
+"What are the main topics discussed on this page?"
+"Navigate to the pricing page and tell me the cost of the Pro plan"
+```
+
+### Distribution
+
+Share your userscript with others:
+
+1. **Direct File**: Share `agent-browser.user.js` directly
+2. **GitHub Pages**: Host on GitHub Pages for one-click install
+3. **Greasyfork**: Publish to [Greasyfork.org](https://greasyfork.org) for public discovery
+4. **Auto-updates**: Edit the `@updateURL` in the userscript header to enable automatic updates
+
+### Customization
+
+The userscript configuration is fully dynamic. Edit `userscript/main.ts` to:
+
+- **Change model**: `model: 'gpt-4o-mini'` for faster/cheaper responses
+- **Add system prompt**: Customize agent behavior
+- **Select tools**: Register only the tools you need
+- **Adjust max iterations**: Control how long the agent runs
+
+Then rebuild with `npm run build:userscript`.
+
 ## Using as a Library
 
 ### Basic Usage
@@ -525,11 +609,12 @@ const llmClient = new LLMClient({
 ## Future Roadmap
 
 - [x] MCP (Model Context Protocol) server integration
-- [ ] Browser API tools (DOM manipulation, localStorage access)
-- [ ] Web scraping and navigation tools
+- [x] Browser API tools (DOM manipulation, localStorage access)
+- [x] Web scraping and navigation tools via userscript
+- [x] Portable userscript for web automation
 - [ ] Streaming LLM responses
 - [ ] Multi-agent orchestration
-- [ ] Chrome extension packaging
+- [ ] Chrome extension packaging (optional - userscript already works)
 - [ ] WASM for performance-critical operations
 - [ ] Vector search and embeddings
 - [ ] Vision and multimodal support
