@@ -2,6 +2,8 @@
 
 A lightweight, browser-native AI agent framework using the ReAct (Reasoning + Acting) loop pattern. Run autonomous AI agents entirely in your browser with support for custom tools and multiple LLM providers.
 
+_This project was developed with the assistance of AI tools for code generation, optimization, and/or documentation._
+
 ## Features
 
 - **Browser-native**: Everything runs in the browser, no server-side dependencies
